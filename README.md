@@ -1,5 +1,8 @@
 # Unofficial Implementation of Prediction Depth
+
 This is a community script for [Deep Learning Through the Lens of Example Difficulty](https://arxiv.org/abs/2106.09647).
+
+This implementation is done here https://github.com/pengbohua/AngularGap/tree/12dad1ec18d3c15a41835c3c342f82051d895ccc/standard_curriculum_learning/prediction_depth
 
 ## requirement
 ```shell script
