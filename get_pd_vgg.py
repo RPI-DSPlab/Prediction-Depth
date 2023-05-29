@@ -223,8 +223,14 @@ def main(train_idx, val_idx, random_seed=1234, flip=''):
     else:
         raise NotImplementedError
 
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
+
+
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
+
 
     optimizer = torch.optim.SGD(model.parameters(), lr=lr_init, momentum=momentum)
     if not args.resume:
