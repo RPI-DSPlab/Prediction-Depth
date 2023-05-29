@@ -3,11 +3,19 @@ import torch
 import torch.nn.functional as F
 
 class VGGPD(nn.Module):
+    """
+    VGG model for computing Prediction Depth
+    """
     def __init__(
             self,
             encoder=None,
             num_classes=100
     ):
+        """
+        initializer of VGG model for computing Prediction Depth
+        :param encoder: the encoder of the VGG model, should be passed when a instance of VGGPD is created
+        :param num_classes: number of classes
+        """
         super(VGGPD, self).__init__()
         self.encoder = encoder
         self.classifier = nn.Sequential(nn.Flatten(),
@@ -22,7 +30,7 @@ class VGGPD(nn.Module):
         """
         n_layer = 0
         _fm = None
-        for m in self.encoder.children():
+        for m in self.encoder.children(): #  x goes through all the layers
             x = m(x)
             if not train:
                 if isinstance(m, nn.Conv2d):
@@ -76,6 +84,18 @@ class MLP7(nn.Module):
             return None, representations[k]
 
 def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t, rm_top1=True, dist='l2'):
+    """
+    knn prediction
+    :param feature: feature vector of the current evaluating pt (dim = [B, F]
+    :param feature_bank: feature bank of the train split
+    :param feature_labels: labels of the feature bank
+    :param classes: number of classes
+    :param knn_k: number of nearest neighbors
+    :param knn_t: temperature
+    :param rm_top1: whether to remove the nearest pt of current evaluating pt in the train split
+    :param dist: distance metric
+    :return: prediction scores
+    """
     # compute cos similarity between each feature vector and feature bank ---> [B, N]
     B, F = feature.shape
     K, F = feature_bank.shape
