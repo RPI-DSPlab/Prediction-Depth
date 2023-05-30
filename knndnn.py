@@ -34,7 +34,7 @@ class VGGPD(nn.Module):
             x = m(x)
             if not train:
                 if isinstance(m, nn.Conv2d):
-                    if n_layer == k:
+                    if n_layer == k: # returns here if we are getting the feature map from this layer
                         return None, x.view(x.shape[0], -1) # B x (C x F x F)
                     n_layer += 1
         logits = self.classifier(x)
@@ -87,18 +87,19 @@ def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t, rm
     """
     knn prediction
     :param feature: feature vector of the current evaluating pt (dim = [B, F]
-    :param feature_bank: feature bank of the train split
-    :param feature_labels: labels of the feature bank
+    :param feature_bank: feature bank of the support set (dim = [K, F]
+    :param feature_labels: labels of the support set (dim = [K]
     :param classes: number of classes
     :param knn_k: number of nearest neighbors
     :param knn_t: temperature
-    :param rm_top1: whether to remove the nearest pt of current evaluating pt in the train split
+    :param rm_top1: whether to remove the nearest pt of current evaluating pt in the train split (explain: this is because
+                    the feature vector of the current evaluating pt may also be in the feature bank)
     :param dist: distance metric
-    :return: prediction scores
+    :return: prediction scores for each class (dim = [B, classes]
     """
     # compute cos similarity between each feature vector and feature bank ---> [B, N]
-    B, F = feature.shape
-    K, F = feature_bank.shape
+    B, F = feature.shape  # one feature
+    K, F = feature_bank.shape  # feature bank
     if dist =='cosine':
         feature = F.normalize(feature, dim=1, p=2.0)
         feature_bank = F.normalize(feature_bank, dim=1, p=2.0)     # normalize feature dim

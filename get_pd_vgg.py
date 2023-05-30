@@ -69,6 +69,7 @@ def trainer(trainloader, testloader, model, optimizer, num_epochs, criterion, ra
     curr_iteration = 0
     cos_scheduler = CosineAnnealingLR(optimizer, num_epochs)
     history = {'train_loss': [], 'test_loss': [], 'train_acc': [], 'test_acc': []}
+    print('------ Training started on %s with total number of %d epochs ------', device, num_epochs)
     for epo in range(num_epochs):
         train_acc = 0
         train_num_total = 0
@@ -114,35 +115,62 @@ def trainer(trainloader, testloader, model, optimizer, num_epochs, criterion, ra
 
 
 def _get_feature_bank_from_kth_layer(model, dataloader, k):
+    """
+    Get feature bank from kth layer of the model
+    :param model: the model
+    :param dataloader: the dataloader
+    :param k: the kth layer
+    :return: the feature bank (k-th layer feature for each datapoint) and
+            the all label bank (ground truth label for each datapoint)
+    """
+    # NOTE: dataloader now has the return format of '(img, target), index'
     print(k, 'layer feature bank gotten')
     with torch.no_grad():
         for (img, all_label), idx in dataloader:
-            img = img.cuda(non_blocking=True)
+            img = img.cuda(non_blocking=True)  # an image from the dataset
             all_label = all_label.cuda(non_blocking=True)
+
+            # the return of model():'None, _fm.view(_fm.shape[0], -1)  # B x (C x F x F)'
             if args.half:
                 with autocast():
                     _, fms = model(img, k, train=False)
             else:
                 _, fms = model(img, k, train=False)
+    # print("return value from _get_feature_bank_from_kth_layer:\n", "fms:\n", fms, "\nlen of fms: ", len(fms), "\nall_label\n:", all_label, "\nlen of all_label: ", len(all_label))
     return fms, all_label
 
 
 def get_knn_prds_k_layer(model, evaloader, floader, k, train_split=True):
+    """
+    Get the knn predictions for the kth layer
+    :param model: the model
+    :param evaloader: the evaluation dataloader (training or validation)
+    :param floader: the feature dataloader (support set)
+    :param k: the kth layer
+    :param train_split: whether the evaloader is the training set or not
+    """
     knn_labels_all = []
     knn_conf_gt_all = []  # This statistics can be noisy
     indices_all = []
-    f_bank, all_labels = _get_feature_bank_from_kth_layer(model, floader, k)
+    f_bank, all_labels = _get_feature_bank_from_kth_layer(model, floader, k)  # get the feature bank and all labels for the support set
     f_bank = f_bank.t().contiguous()
     with torch.no_grad():
         for j, ((imgs, labels), idx) in enumerate(evaloader):
             imgs = imgs.cuda(non_blocking=True)
             labels_b = labels.cuda(non_blocking=True)
-            nm_cls = 10
+            nm_cls = args.num_classes
             if args.half:
                 with autocast():
                     _, inp_f_curr = model(imgs, k, train=False)
             else:
                 _, inp_f_curr = model(imgs, k, train=False)
+            """
+            Explanation of the following function:
+            knn_predict(inp_f_curr, f_bank, all_labels, classes=nm_cls, knn_k=args.knn_k, knn_t=1, rm_top1=train_split)
+            inp_f_curr is the feature of the image we want to predict it's label
+            f_bank is the feature bank of the support set, and we know its ground truth label given all_labels
+            We want to use information from the support set (f_bank) to predict the label of the image (inp_f_curr)
+            """
             knn_scores = knn_predict(inp_f_curr, f_bank, all_labels, classes=nm_cls, knn_k=args.knn_k, knn_t=1, rm_top1=train_split)  # B x C
             knn_probs = F.normalize(knn_scores, p=1, dim=1)
             knn_labels_prd = knn_probs.argmax(1)
@@ -224,10 +252,6 @@ def main(train_idx, val_idx, random_seed=1234, flip=''):
         raise NotImplementedError
 
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
-
-
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
 
@@ -248,6 +272,11 @@ def main(train_idx, val_idx, random_seed=1234, flip=''):
             knn_labels, knn_conf_gt_all, indices_all = get_knn_prds_k_layer(model, evaluate_loader_train, supportloader,
                                                                             k, train_split=args.get_train_pd)
             for idx, knn_l, knn_conf_gt in zip(indices_all, knn_labels, knn_conf_gt_all):
+                # TODO: fix error:
+                """
+                RuntimeError: The expanded size of the tensor (5000) must match the existing size (65536) at 
+                non-singleton dimension 2.  Target sizes: [200, 65536, 5000].  Tensor sizes: [200, 1, 65536]
+                """
                 index_knn_y[int(idx)].append(knn_l.item())
                 knn_gt_conf_all[int(idx)].append(knn_conf_gt.item())
         for idx, knn_ls in index_knn_y.items():

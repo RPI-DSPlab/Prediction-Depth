@@ -12,3 +12,6 @@ cifar-10-batches-py/data_batch_5
 cifar-10-batches-py/readme.html
 *.gz
 freqent_used_cmd.txt
+*.pt
+cmd.txt
+outputincommand.txt
