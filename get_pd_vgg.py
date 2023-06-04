@@ -137,7 +137,8 @@ def _get_feature_bank_from_kth_layer(model, dataloader, k):
             else:
                 _, fms = model(img, k, train=False)
     # print("return value from _get_feature_bank_from_kth_layer:\n", "fms:\n", fms, "\nlen of fms: ", len(fms), "\nall_label\n:", all_label, "\nlen of all_label: ", len(all_label))
-    return fms, all_label
+
+    return fms, all_label # somehow, the shape of fms is (number of image) * (it's feature map size)
 
 
 def get_knn_prds_k_layer(model, evaloader, floader, k, train_split=True):
@@ -167,7 +168,7 @@ def get_knn_prds_k_layer(model, evaloader, floader, k, train_split=True):
             """
             Explanation of the following function:
             knn_predict(inp_f_curr, f_bank, all_labels, classes=nm_cls, knn_k=args.knn_k, knn_t=1, rm_top1=train_split)
-            inp_f_curr is the feature of the image we want to predict it's label
+            inp_f_curr is the feature of the image (batch of images) we want to predict it's label
             f_bank is the feature bank of the support set, and we know its ground truth label given all_labels
             We want to use information from the support set (f_bank) to predict the label of the image (inp_f_curr)
             """

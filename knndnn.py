@@ -86,8 +86,8 @@ class MLP7(nn.Module):
 def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t, rm_top1=True, dist='l2'):
     """
     knn prediction
-    :param feature: feature vector of the current evaluating pt (dim = [B, F]
-    :param feature_bank: feature bank of the support set (dim = [K, F]
+    :param feature: feature vector of the current evaluating batch (dim = [B, F]
+    :param feature_bank: feature bank of the support set (dim = [F, K]
     :param feature_labels: labels of the support set (dim = [K]
     :param classes: number of classes
     :param knn_k: number of nearest neighbors
@@ -95,26 +95,47 @@ def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t, rm
     :param rm_top1: whether to remove the nearest pt of current evaluating pt in the train split (explain: this is because
                     the feature vector of the current evaluating pt may also be in the feature bank)
     :param dist: distance metric
-    :return: prediction scores for each class (dim = [B, classes]
+    :return: prediction scores for each class (dim = [classes]
     """
     # compute cos similarity between each feature vector and feature bank ---> [B, N]
-    B, F = feature.shape  # one feature
-    K, F = feature_bank.shape  # feature bank
+    feature_bank = feature_bank.t()  # [F, K].t() -> [K, F]
+    B, F = feature.shape  # dim of feature vector of the current evaluating pt
+    print("F: ", F)
+    K, F = feature_bank.shape  # dim feature bank
+    """
+    B: batch size (ie: 200)
+    F: feature dimension (ie: 65536)
+    K: number of pts in the feature bank (ie 5000)
+    """
+
+    print("------------------")
+    print("feature label shape: ", feature_labels.shape)
+    print("feature shape: ", feature.shape)
+    print("feature bank shape: ", feature_bank.shape)
+    print("B: ", B)
+    print("F: ", F)
+    print("K: ", K)
+    print("------------------")
+
     if dist =='cosine':
         feature = F.normalize(feature, dim=1, p=2.0)
         feature_bank = F.normalize(feature_bank, dim=1, p=2.0)     # normalize feature dim
         feature.mul_(feature_bank.t().contiguous()) # similarity
     elif dist =='l2':
+
+
         feature = feature.unsqueeze(1).expand(B, K, F)
         feature_bank = feature_bank.unsqueeze(0).expand(B, K, F)
-        feature.sub_(feature_bank).pow_(2).sum_(2)  # similarity
+        feature = feature.sub_(feature_bank).pow_(2).sum_(2)  # similarity
+
+
     else:
         raise NotImplementedError
 
     # [B, K]
     if rm_top1:
         sim_weight_add_one, sim_indices_add_one = feature.topk(k=(knn_k + 1), dim=-1)
-        sim_weight, sim_indices = sim_weight_add_one[:, 1:], sim_indices_add_one[:, 1:]   # remove the nearest pt of current evaluating pt in the train split
+        sim_weight, sim_indices = sim_weight_add_one[:, 1:], sim_indices_add_one[:, 1:]  # remove the nearest pt of current evaluating pt in the train split
     else:
         sim_weight, sim_indices = feature.topk(k=knn_k, dim=-1)
     # [B, K] labels for all pts in feature bank along dim1
