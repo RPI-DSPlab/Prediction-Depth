@@ -95,7 +95,7 @@ def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t, rm
     :param rm_top1: whether to remove the nearest pt of current evaluating pt in the train split (explain: this is because
                     the feature vector of the current evaluating pt may also be in the feature bank)
     :param dist: distance metric
-    :return: prediction scores for each class (dim = [classes]
+    :return: prediction scores for each class (dim = [B, classes]
     """
     # compute cos similarity between each feature vector and feature bank ---> [B, N]
     feature_bank = feature_bank.t()  # [F, K].t() -> [K, F]

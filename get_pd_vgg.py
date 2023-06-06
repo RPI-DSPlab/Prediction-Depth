@@ -59,6 +59,15 @@ elif args.arch == 'resnet':
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
+class CIFAR10PD(CIFAR10):
+    def __init__(self, root, train=True, transform=None, target_transform=None, download=False):
+        super(CIFAR10PD, self).__init__(root, train, transform, target_transform, download)
+
+    def __getitem__(self, index):
+        # to get (img, target), index
+        img, target = super(CIFAR10PD, self).__getitem__(index)
+        return (img, target), index
+
 def mile_stone_step(optimizer, curr_iter):
     if curr_iter in mile_stones:
         for param_gp in optimizer.param_groups:
@@ -223,8 +232,8 @@ def main(train_idx, val_idx, random_seed=1234, flip=''):
                                 T.Normalize(mean=[0.4914, 0.4822, 0.4465], std=(0.247, 0.243, 0.261))
                                 ])
     if args.data == 'cifar10':
-        trainset = CIFAR10('./', transform=train_transform, train=False, download=True)
-        testset = CIFAR10('./', transform=test_transform, train=True, download=True)
+        trainset = CIFAR10PD('./', transform=train_transform, train=False, download=True)
+        testset = CIFAR10PD('./', transform=test_transform, train=True, download=True)
     else:
         raise NotImplementedError
 
