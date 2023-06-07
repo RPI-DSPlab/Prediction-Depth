@@ -100,7 +100,6 @@ def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t, rm
     # compute cos similarity between each feature vector and feature bank ---> [B, N]
     feature_bank = feature_bank.t()  # [F, K].t() -> [K, F]
     B, F = feature.shape  # dim of feature vector of the current evaluating pt
-    print("F: ", F)
     K, F = feature_bank.shape  # dim feature bank
     """
     B: batch size (ie: 200)
@@ -108,50 +107,45 @@ def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t, rm
     K: number of pts in the feature bank (ie 5000)
     """
 
-    print("------------------")
-    print("feature label shape: ", feature_labels.shape)
-    print("feature shape: ", feature.shape)
-    print("feature bank shape: ", feature_bank.shape)
-    print("B: ", B)
-    print("F: ", F)
-    print("K: ", K)
-    print("------------------")
+    # print("------------------")
+    # print("feature label shape: ", feature_labels.shape)
+    # print("feature shape: ", feature.shape)
+    # print("feature bank shape: ", feature_bank.shape)
+    # print("B: ", B)
+    # print("F: ", F)
+    # print("K: ", K)
+    # print("------------------")
 
-    if dist =='cosine':
-        feature = F.normalize(feature, dim=1, p=2.0)
-        feature_bank = F.normalize(feature_bank, dim=1, p=2.0)     # normalize feature dim
-        feature.mul_(feature_bank.t().contiguous()) # similarity
-    elif dist =='l2':
+    if dist == 'l2':
+        knn_dist = 2
 
+    distances = torch.cdist(feature, feature_bank, p=knn_dist)
 
-        feature = feature.unsqueeze(1).expand(B, K, F)
-        feature_bank = feature_bank.unsqueeze(0).expand(B, K, F)
-        feature = feature.sub_(feature_bank).pow_(2).sum_(2)  # similarity
+    # Find the k nearest neighbors of the input feature.
+    nearest_neighbors = distances.argsort(dim=1)[:, :knn_k]
 
-
-    else:
-        raise NotImplementedError
-
-    # [B, K]
+    # If `rm_top1` is True, remove the nearest neighbor of the current evaluating point from the list of nearest neighbors.
     if rm_top1:
-        sim_weight_add_one, sim_indices_add_one = feature.topk(k=(knn_k + 1), dim=-1)
-        sim_weight, sim_indices = sim_weight_add_one[:, 1:], sim_indices_add_one[:, 1:]  # remove the nearest pt of current evaluating pt in the train split
+        mask = torch.ones(nearest_neighbors.shape[1], dtype=torch.bool)
+        mask[0] = False  # mask the first element
+        nearest_neighbors_dropped = nearest_neighbors[:, mask]
+        nearest_labels = feature_labels[nearest_neighbors_dropped]
     else:
-        sim_weight, sim_indices = feature.topk(k=knn_k, dim=-1)
-    # [B, K] labels for all pts in feature bank along dim1
-    sim_labels = torch.gather(feature_labels.expand(feature.size(0), -1), dim=-1, index=sim_indices)
+        nearest_labels = feature_labels[nearest_neighbors]
 
-    sim_weight = (sim_weight / knn_t).exp()
+    # Compute the weighted scores using the inverse distances
+    inv_distances = (1.0 / distances[:, :knn_k])
+    knn_scores = torch.zeros(B, classes, device=feature.device)
 
-    # counts for each class
-    one_hot_label = torch.zeros(feature.size(0) * knn_k, classes, device=sim_labels.device)
-    # [B*K, C]
-    one_hot_label = one_hot_label.scatter(dim=-1, index=sim_labels.view(-1, 1), value=1.0)
-    # weighted score ---> [B, C]
-    pred_scores = torch.sum(one_hot_label.view(feature.size(0), -1, classes) * sim_weight.unsqueeze(dim=-1), dim=1)
-    # pred_prob = F.normalize(pred_scores, p=1, dim=1)
-    # pred_labels = pred_scores.argsort(dim=-1, descending=True)      # rank the knn labels
-    return pred_scores
+    for i in range(B):
+        for j in range(knn_k - 1 if rm_top1 else knn_k):
+            knn_scores[i, nearest_labels[i, j]] += inv_distances[i, j]
+
+    # Apply temperature scaling
+    knn_scores /= knn_t
+
+    return knn_scores
+
 
 class BasicBlockPD(nn.Module):
     expansion = 1

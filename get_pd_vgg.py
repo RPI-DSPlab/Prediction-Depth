@@ -1,4 +1,6 @@
 import torch
+from torchvision.transforms import PILToTensor
+
 from knndnn import VGGPD, MLP7, ResNetPD, BasicBlockPD
 from torchvision.datasets import CIFAR10
 import torchvision.transforms as T
@@ -28,7 +30,7 @@ parser.add_argument('--get_val_pd', default=True, type=bool, help='get predictio
 parser.add_argument('--resume', default=False, type=bool, help='resume from the ckpt')
 parser.add_argument('--fraction', default=0.4, type=float, help='ratio of noise')
 parser.add_argument('--half', default=False, type=str, help='use amp if GPU memory is 15 GB; set to False if GPU memory is 32 GB ')
-parser.add_argument('--num_epochs', default=80, type=int, help='number of epochs for training')
+parser.add_argument('--num_epochs', defauclt=80, type=int, help='number of epochs for training')
 parser.add_argument('--total_iteration', default=15000, type=str, help='if training process is more than total iteration then stop')
 parser.add_argument('--num_classes', default=10, type=int, help='number of classes')
 parser.add_argument('--num_samples', default=10000, type=int, help='number of samples')
@@ -68,6 +70,15 @@ class CIFAR10PD(CIFAR10):
         img, target = super(CIFAR10PD, self).__getitem__(index)
         return (img, target), index
 
+
+class CIFAR10PD_save(CIFAR10PD):
+    def __init__(self, root, train=True, transform=None, target_transform=None, download=False):
+        super(CIFAR10PD_save, self).__init__(root, train, transform, target_transform, download)
+
+    def __getitem__(self, index):
+        (img, target), index = super(CIFAR10PD_save, self).__getitem__(index)
+        return PILToTensor()(img), target, index
+
 def mile_stone_step(optimizer, curr_iter):
     if curr_iter in mile_stones:
         for param_gp in optimizer.param_groups:
@@ -78,7 +89,7 @@ def trainer(trainloader, testloader, model, optimizer, num_epochs, criterion, ra
     curr_iteration = 0
     cos_scheduler = CosineAnnealingLR(optimizer, num_epochs)
     history = {'train_loss': [], 'test_loss': [], 'train_acc': [], 'test_acc': []}
-    print('------ Training started on %s with total number of %d epochs ------', device, num_epochs)
+    print('------ Training started on %s with total number of %d epochs ------'.format(device, num_epochs))
     for epo in range(num_epochs):
         train_acc = 0
         train_num_total = 0
@@ -234,6 +245,12 @@ def main(train_idx, val_idx, random_seed=1234, flip=''):
     if args.data == 'cifar10':
         trainset = CIFAR10PD('./', transform=train_transform, train=False, download=True)
         testset = CIFAR10PD('./', transform=test_transform, train=True, download=True)
+
+        #TODO: maybe I should save this dataset in a dictionary with index for visualization so the index is consistent
+        # saving images with index for visualization
+        # cifar_with_index = {}
+        # with open(os.path.join(os.getcwd(), 'CIFAR-with-index.pkl', 'w')) as f:
+        #     json.dump(cifar_with_index, f)
     else:
         raise NotImplementedError
 
@@ -274,7 +291,6 @@ def main(train_idx, val_idx, random_seed=1234, flip=''):
         model.load_state_dict(torch.load(os.path.join(args.result_dir, 'ms{}_{}sgd{}_{}.pt'.format(args.arch, args.data, random_seed, flip))))
 
     if args.get_train_pd:
-        # TODO exclude current batch from support set
         index_knn_y = collections.defaultdict(list)
         index_pd = collections.defaultdict(list)
         knn_gt_conf_all = collections.defaultdict(list)
@@ -282,11 +298,6 @@ def main(train_idx, val_idx, random_seed=1234, flip=''):
             knn_labels, knn_conf_gt_all, indices_all = get_knn_prds_k_layer(model, evaluate_loader_train, supportloader,
                                                                             k, train_split=args.get_train_pd)
             for idx, knn_l, knn_conf_gt in zip(indices_all, knn_labels, knn_conf_gt_all):
-                # TODO: fix error:
-                """
-                RuntimeError: The expanded size of the tensor (5000) must match the existing size (65536) at 
-                non-singleton dimension 2.  Target sizes: [200, 65536, 5000].  Tensor sizes: [200, 1, 65536]
-                """
                 index_knn_y[int(idx)].append(knn_l.item())
                 knn_gt_conf_all[int(idx)].append(knn_conf_gt.item())
         for idx, knn_ls in index_knn_y.items():
@@ -317,6 +328,7 @@ def main(train_idx, val_idx, random_seed=1234, flip=''):
 if __name__ == '__main__':
     seeds = [9203, 9304, 9837, 9612, 3456, 5210]
     for seed in seeds:
+        print("------------------{}-th seed {} out of {} many seeds------------------".format(seed, seeds.index(seed), len(seeds)))
         set_seed(seed)
         train_indices, val_indices = train_test_split(np.arange(args.num_samples), train_size=args.train_ratio,
                                                    test_size=(1 - args.train_ratio))     # split the data
