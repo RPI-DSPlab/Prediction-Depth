@@ -1,6 +1,6 @@
 import torch
 from torchvision.transforms import PILToTensor
-
+import matplotlib.pyplot as plt
 from knndnn import VGGPD, MLP7, ResNetPD, BasicBlockPD
 from torchvision.datasets import CIFAR10
 import torchvision.transforms as T
@@ -25,12 +25,12 @@ parser.add_argument('--train_ratio', default=0.5, type=float, help='ratio of tra
 parser.add_argument('--result_dir', default='./cl_results_vgg', type=str, help='directory to save ckpt and results')
 parser.add_argument('--data', default='cifar10', type=str, help='dataset')
 parser.add_argument('--arch', default='vgg', type=str, help='vgg / mlp / resnet')
-parser.add_argument('--get_train_pd', default=True, type=bool, help='get prediction depth for training split')
+parser.add_argument('--get_train_pd', default=False, type=bool, help='get prediction depth for training split')
 parser.add_argument('--get_val_pd', default=True, type=bool, help='get prediction depth for validation split')
 parser.add_argument('--resume', default=False, type=bool, help='resume from the ckpt')
 parser.add_argument('--fraction', default=0.4, type=float, help='ratio of noise')
 parser.add_argument('--half', default=False, type=str, help='use amp if GPU memory is 15 GB; set to False if GPU memory is 32 GB ')
-parser.add_argument('--num_epochs', defauclt=80, type=int, help='number of epochs for training')
+parser.add_argument('--num_epochs', default=80, type=int, help='number of epochs for training')
 parser.add_argument('--total_iteration', default=15000, type=str, help='if training process is more than total iteration then stop')
 parser.add_argument('--num_classes', default=10, type=int, help='number of classes')
 parser.add_argument('--num_samples', default=10000, type=int, help='number of samples')
@@ -254,6 +254,20 @@ def main(train_idx, val_idx, random_seed=1234, flip=''):
     else:
         raise NotImplementedError
 
+
+    # # print whether the index 1198 image is a horse or no to verify if the index is consistent:
+    # (img, target), index = testset[1198]
+    #
+    # # Display and save the image
+    # plt.imshow(img.permute(1, 2, 0))
+    # plt.title(f"Index: {index}, Target: {target}")
+    #
+    # # Save the image in the current directory
+    # plt.savefig("image_1198.png")
+    #
+    # exit()
+
+
     train_split = Subset(trainset, train_idx)
     supportset = train_split
     val_split = Subset(trainset, val_idx)
@@ -333,4 +347,4 @@ if __name__ == '__main__':
         train_indices, val_indices = train_test_split(np.arange(args.num_samples), train_size=args.train_ratio,
                                                    test_size=(1 - args.train_ratio))     # split the data
         main(train_indices, val_indices, random_seed=seed, flip='')
-        main(val_indices, train_indices, random_seed=seed, flip='flip')
+        # main(val_indices, train_indices, random_seed=seed, flip='flip')
